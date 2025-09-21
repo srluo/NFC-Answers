@@ -31,8 +31,11 @@
         const res = await fetch("book_of_answers_384_full.json"); // 放在同資料夾
         const data = await res.json();
         const pick = data[Math.floor(Math.random() * data.length)];
-        document.getElementById("answer_tw").innerText = pick.zh;
-        document.getElementById("answer_en").innerText = pick.en;
+
+        // 對應 JSON 的欄位名稱
+        document.getElementById("ansZh").innerText = pick.answer_tw;
+        document.getElementById("ansEn").innerText = pick.answer_en;
+
         document.getElementById("output").style.display = "block";
       } catch (err) {
         alert("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！");
