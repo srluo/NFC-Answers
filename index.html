@@ -7,100 +7,123 @@
   <style>
     body { font-family: "Microsoft JhengHei", sans-serif; background:#f7f9fc; color:#333; text-align:center; padding:2rem; }
     header { font-size:1.6rem; font-weight:bold; color:#4a4a9f; margin-bottom:1rem; }
-    .result { margin-top:2rem; padding:1.5rem; border-radius:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
-    .error { margin-top:2rem; padding:1rem; border-radius:8px; background:#ffe6e6; color:#cc0000; font-weight:bold; }
-    .reset-btn { margin-top:2rem; background:#aaa; color:#fff; padding:0.5rem 1rem; border:none; border-radius:6px; cursor:pointer; font-size:0.9rem; }
-    .reset-btn:hover { background:#888; }
+    .result { margin-top:2rem; padding:1.5rem; border-radius:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); font-size:1.2rem; line-height:1.8; }
+    .notice { margin-top:1rem; color:#cc0000; font-weight:bold; }
+    .info { margin-top:0.8rem; font-size:0.9rem; color:#666; }
+    button { margin-top:1.5rem; background:#bbb; color:#fff; padding:0.5rem 1rem; border:none; border-radius:6px; cursor:pointer; font-size:0.9rem; }
+    button:hover { background:#999; }
   </style>
 </head>
 <body>
   <header>📖 答案之書 (NFC Demo)</header>
+  <p>感應 NFC 鑰匙圈即可抽出一則答案</p>
+
   <div id="output" class="result" style="display:none;">
     <h3>✨ 今日答案</h3>
-    <p><b>中文：</b><span id="ansZh"></span></p>
-    <p><b>English:</b> <span id="ansEn"></span></p>
-    <p>📌 今日已抽：<span id="count"></span> / 3 次</p>
+    <p id="ansZh"></p>
+    <p id="ansEn" style="color:#555;font-size:1rem;"></p>
+    <p id="remaining" class="info"></p>
   </div>
-  <div id="error" class="error" style="display:none;"></div>
 
-  <!-- 測試用重置按鈕 -->
-  <button class="reset-btn" onclick="resetToday()">🧹 測試重置今日紀錄</button>
+  <p id="notice" class="notice" style="display:none;"></p>
+  <button onclick="resetRecord()">🔄 測試用：重置抽籤紀錄</button>
 
   <script>
-    async function init() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get("d");
-      if (!token) {
-        showError("⚠️ 缺少 Token，請透過 NFC 感應進入。");
-        return;
+    function checkToken(uid, tsHex) {
+      const today = new Date().toISOString().slice(0, 10);
+      let record = JSON.parse(localStorage.getItem("tokenRecord") || "{}");
+
+      if (record.date !== today) {
+        record = { date: today, data: {} };
       }
 
-      // 解析 token（假設格式 <UID><TF2><TS8><RAND>）
-      const tsHex = token.substring(16, 24);
+      const userData = record.data[uid] || { lastTS: null, count: 0, usedAnswers: [] };
       const tsVal = parseInt(tsHex, 16);
 
-      const todayKey = new Date().toISOString().slice(0,10); // yyyy-mm-dd
-      const storeKey = `answers_${todayKey}`;
-      const tsKey = "answers_lastTS";
-
-      let record = JSON.parse(localStorage.getItem(storeKey) || "[]");
-      let lastTS = parseInt(localStorage.getItem(tsKey) || "0", 10);
-
-      // Token 檢查
-      if (tsVal <= lastTS) {
-        showError("⚠️ Token 無效或重複使用，請重新感應。");
-        return;
+      if (userData.lastTS === null) {
+        userData.lastTS = tsVal;
+        userData.count = 1;
+        record.data[uid] = userData;
+        localStorage.setItem("tokenRecord", JSON.stringify(record));
+        return { ok: true, first: true, userData, record };
       }
 
-      if (record.length >= 3) {
-        showError("⚠️ 今日已達 3 次抽籤上限。");
-        return;
+      if (tsVal <= userData.lastTS) {
+        return { ok: false, error: "⚠️ Token 無效或重複使用，請重新感應。" };
       }
 
+      if (userData.count >= 3) {
+        return { ok: false, error: "⚠️ 今日抽籤次數已達上限（3次）。" };
+      }
+
+      userData.lastTS = tsVal;
+      userData.count += 1;
+      record.data[uid] = userData;
+      localStorage.setItem("tokenRecord", JSON.stringify(record));
+
+      return { ok: true, first: false, userData, record };
+    }
+
+    async function drawAnswer(uid, count) {
       try {
         const res = await fetch("book_of_answers_384_full.json");
         const data = await res.json();
 
-        // 過濾掉已抽過的答案
-        const usedIds = record.map(r => r.id);
-        const available = data.filter(item => !usedIds.includes(item.id));
+        const record = JSON.parse(localStorage.getItem("tokenRecord") || "{}");
+        const userData = record.data[uid] || { usedAnswers: [] };
 
+        let available = data.filter(d => !userData.usedAnswers?.includes(d.id));
         if (available.length === 0) {
-          showError("⚠️ 今日可用答案已用完。");
-          return;
+          available = [...data];
+          userData.usedAnswers = [];
         }
 
         const pick = available[Math.floor(Math.random() * available.length)];
 
-        // 更新 localStorage
-        record.push({ ts: tsVal, id: pick.id });
-        localStorage.setItem(storeKey, JSON.stringify(record));
-        localStorage.setItem(tsKey, tsVal);
+        userData.usedAnswers = [...(userData.usedAnswers || []), pick.id];
+        record.data[uid] = userData;
+        localStorage.setItem("tokenRecord", JSON.stringify(record));
 
         document.getElementById("ansZh").innerText = pick.answer_tw;
         document.getElementById("ansEn").innerText = pick.answer_en;
-        document.getElementById("count").innerText = record.length;
+        document.getElementById("remaining").innerText = `今日剩餘次數：${3 - count} / 3`;
         document.getElementById("output").style.display = "block";
+
       } catch (err) {
-        showError("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！");
+        alert("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！");
       }
     }
 
-    function resetToday() {
-      const todayKey = new Date().toISOString().slice(0,10);
-      localStorage.removeItem(`answers_${todayKey}`);
-      localStorage.removeItem("answers_lastTS");
-      alert("✅ 今日抽籤紀錄已清空，可以重新測試！");
-      location.reload();
-    }
+    window.addEventListener("load", () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("d");
 
-    function showError(msg) {
-      const el = document.getElementById("error");
-      el.innerText = msg;
-      el.style.display = "block";
-    }
+      if (!token) {
+        document.getElementById("notice").innerText = "⚠️ 未偵測到 Token，請從 NFC 鑰匙圈感應進入！";
+        document.getElementById("notice").style.display = "block";
+        return;
+      }
 
-    window.onload = init;
+      const uid = token.substring(0, 14);
+      const tsHex = token.substring(16, 24);
+      const check = checkToken(uid, tsHex);
+
+      if (!check.ok) {
+        document.getElementById("notice").innerText = check.error;
+        document.getElementById("notice").style.display = "block";
+        return;
+      }
+
+      drawAnswer(uid, check.userData.count);
+    });
+
+    // 🔄 測試用：不 reload，直接清空
+    function resetRecord() {
+      localStorage.removeItem("tokenRecord");
+      document.getElementById("notice").innerText = "✅ 抽籤紀錄已重置，可以重新感應。";
+      document.getElementById("notice").style.display = "block";
+      document.getElementById("output").style.display = "none";
+    }
   </script>
 </body>
 </html>
