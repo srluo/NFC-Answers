@@ -3,14 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NFC 答案之書 Demo</title>
+  <title>NFC 求解之書 Demo</title>
   <style>
     body {
       font-family:"Microsoft JhengHei",sans-serif;
       color:#333;
       text-align:center;
       padding:2rem;
-      /* 設定背景為你上傳的古卷紋理圖 */
       background: url("book_bg1.jpg") no-repeat center center fixed;
       background-size: cover;
     }
@@ -67,20 +66,24 @@
       100% { transform:rotate(360deg); }
     }
     .typing { white-space:pre-wrap; text-align:center; }
+    #hint { margin-top:1rem; color:#333; font-size:1rem; font-weight:bold; }
   </style>
 </head>
 <body>
-  <header>📖 NFC 答案之書</header>
+  <header>📖 NFC 求解之書</header>
   <p>感應 NFC 鑰匙圈即可抽出一則答案</p>
 
   <div id="loading" class="loading">
     <div class="spinner"></div>
     <p>🔮 正在為你抽取今日答案...</p>
+    <p id="hint">請在心中默念要解答的明確問題，心誠則靈！</p>
   </div>
 
   <div id="output" class="result" style="display:none;">
     <p style="color:#555;font-size:1.3rem;">✨ 今日答案 ✨</p>
     <p id="ansZh" class="typing"></p>
+    <img src="dividing-lines-1.png" alt="divider" 
+         style="width:60%;margin:1rem auto;display:block;opacity:0.8;">
     <p id="ansEn" class="typing" style="color:#333;font-size:1.2rem;"></p>
     <p id="remaining" class="info"></p>
   </div>
@@ -154,20 +157,24 @@
           userData.usedAnswers = [];
         }
 
-        const pick = available[Math.floor(Math.random() * available.length)];
+        // 改進亂數：使用 crypto
+        const randIdx = window.crypto.getRandomValues(new Uint32Array(1))[0] % available.length;
+        const pick = available[randIdx];
 
         userData.usedAnswers = [...(userData.usedAnswers || []), pick.id];
         record.data[uid] = userData;
         localStorage.setItem("tokenRecord", JSON.stringify(record));
 
-        // 顯示等待轉盤
+        // 顯示等待轉盤與提示文字
         document.getElementById("loading").style.display = "block";
         document.getElementById("output").style.display = "none";
+        document.getElementById("hint").style.display = "block";
 
-        const delay = 1000 + Math.random() * 2000;
+        const delay = 10000 + Math.random() * 2000; // 10~12秒
 
         setTimeout(() => {
           document.getElementById("loading").style.display = "none";
+          document.getElementById("hint").style.display = "none";
           document.getElementById("output").style.display = "block";
           typeWriter(pick.answer_tw, document.getElementById("ansZh"), 50, () => {
             typeWriter(pick.answer_en, document.getElementById("ansEn"), 40);
