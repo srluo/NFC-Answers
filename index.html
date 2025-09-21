@@ -5,42 +5,102 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NFC 答案之書 Demo</title>
   <style>
-    body { font-family: "Microsoft JhengHei", sans-serif; background: #f7f9fc; color:#333; text-align:center; padding:2rem; }
+    body { font-family: "Microsoft JhengHei", sans-serif; background:#f7f9fc; color:#333; text-align:center; padding:2rem; }
     header { font-size:1.6rem; font-weight:bold; color:#4a4a9f; margin-bottom:1rem; }
-    button { background:#4a4a9f; color:#fff; padding:0.7rem 1.2rem; border:none; border-radius:8px; cursor:pointer; font-size:1rem; }
-    button:hover { background:#373777; }
     .result { margin-top:2rem; padding:1.5rem; border-radius:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
-    .typing { white-space:pre-wrap; line-height:1.6; }
+    .error { margin-top:2rem; padding:1rem; border-radius:8px; background:#ffe6e6; color:#cc0000; font-weight:bold; }
+    .reset-btn { margin-top:2rem; background:#aaa; color:#fff; padding:0.5rem 1rem; border:none; border-radius:6px; cursor:pointer; font-size:0.9rem; }
+    .reset-btn:hover { background:#888; }
   </style>
 </head>
 <body>
   <header>📖 答案之書 (NFC Demo)</header>
-  <p>感應 NFC 鑰匙圈或直接點擊按鈕，即可抽出一則答案</p>
-
-  <button onclick="drawAnswer()">🔮 抽答案</button>
-
   <div id="output" class="result" style="display:none;">
     <h3>✨ 今日答案</h3>
     <p><b>中文：</b><span id="ansZh"></span></p>
     <p><b>English:</b> <span id="ansEn"></span></p>
+    <p>📌 今日已抽：<span id="count"></span> / 3 次</p>
   </div>
+  <div id="error" class="error" style="display:none;"></div>
+
+  <!-- 測試用重置按鈕 -->
+  <button class="reset-btn" onclick="resetToday()">🧹 測試重置今日紀錄</button>
 
   <script>
-    async function drawAnswer() {
-      try {
-        const res = await fetch("book_of_answers_384_full.json"); // 放在同資料夾
-        const data = await res.json();
-        const pick = data[Math.floor(Math.random() * data.length)];
+    async function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("d");
+      if (!token) {
+        showError("⚠️ 缺少 Token，請透過 NFC 感應進入。");
+        return;
+      }
 
-        // 對應 JSON 的欄位名稱
+      // 解析 token（假設格式 <UID><TF2><TS8><RAND>）
+      const tsHex = token.substring(16, 24);
+      const tsVal = parseInt(tsHex, 16);
+
+      const todayKey = new Date().toISOString().slice(0,10); // yyyy-mm-dd
+      const storeKey = `answers_${todayKey}`;
+      const tsKey = "answers_lastTS";
+
+      let record = JSON.parse(localStorage.getItem(storeKey) || "[]");
+      let lastTS = parseInt(localStorage.getItem(tsKey) || "0", 10);
+
+      // Token 檢查
+      if (tsVal <= lastTS) {
+        showError("⚠️ Token 無效或重複使用，請重新感應。");
+        return;
+      }
+
+      if (record.length >= 3) {
+        showError("⚠️ 今日已達 3 次抽籤上限。");
+        return;
+      }
+
+      try {
+        const res = await fetch("book_of_answers_384_full.json");
+        const data = await res.json();
+
+        // 過濾掉已抽過的答案
+        const usedIds = record.map(r => r.id);
+        const available = data.filter(item => !usedIds.includes(item.id));
+
+        if (available.length === 0) {
+          showError("⚠️ 今日可用答案已用完。");
+          return;
+        }
+
+        const pick = available[Math.floor(Math.random() * available.length)];
+
+        // 更新 localStorage
+        record.push({ ts: tsVal, id: pick.id });
+        localStorage.setItem(storeKey, JSON.stringify(record));
+        localStorage.setItem(tsKey, tsVal);
+
         document.getElementById("ansZh").innerText = pick.answer_tw;
         document.getElementById("ansEn").innerText = pick.answer_en;
-
+        document.getElementById("count").innerText = record.length;
         document.getElementById("output").style.display = "block";
       } catch (err) {
-        alert("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！");
+        showError("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！");
       }
     }
+
+    function resetToday() {
+      const todayKey = new Date().toISOString().slice(0,10);
+      localStorage.removeItem(`answers_${todayKey}`);
+      localStorage.removeItem("answers_lastTS");
+      alert("✅ 今日抽籤紀錄已清空，可以重新測試！");
+      location.reload();
+    }
+
+    function showError(msg) {
+      const el = document.getElementById("error");
+      el.innerText = msg;
+      el.style.display = "block";
+    }
+
+    window.onload = init;
   </script>
 </body>
 </html>
