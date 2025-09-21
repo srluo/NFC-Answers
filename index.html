@@ -5,19 +5,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NFC 答案之書 Demo</title>
   <style>
-    body { font-family:"Microsoft JhengHei",sans-serif; background:#f7f9fc; color:#333; text-align:center; padding:2rem; }
-    header { font-size:1.6rem; font-weight:bold; color:#4a4a9f; margin-bottom:1rem; }
-    .result { margin-top:2rem; padding:1.5rem; border-radius:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); font-size:1.2rem; line-height:1.8; }
-    .notice { margin-top:1rem; color:#cc0000; font-weight:bold; }
-    .info { margin-top:0.8rem; font-size:0.9rem; color:#666; }
-    button { margin-top:1.5rem; background:#bbb; color:#fff; padding:0.5rem 1rem; border:none; border-radius:6px; cursor:pointer; font-size:0.9rem; }
-    button:hover { background:#999; }
+    body {
+      font-family:"Microsoft JhengHei",sans-serif;
+      color:#333;
+      text-align:center;
+      padding:2rem;
+      background: linear-gradient(#fdf6e3, #f0e1c6);
+      background-attachment: fixed;
+    }
+    /* 疊加紙紋理 */
+    body::before {
+      content: "";
+      position: fixed;
+      top:0; left:0; right:0; bottom:0;
+      background: url("https://www.transparenttextures.com/patterns/old-mathematics.png") repeat;
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: -1;
+    }
+    header {
+      font-size:1.8rem;
+      font-weight:bold;
+      color:#5c432b;
+      margin-bottom:1rem;
+      text-shadow:1px 1px 2px #e3d9c6;
+    }
+    .result {
+      margin-top:2rem;
+      padding:1.5rem;
+      border-radius:12px;
+      background:rgba(255,255,255,0.85);
+      box-shadow:0 2px 10px rgba(0,0,0,0.15);
+      font-size:1.2rem;
+      line-height:1.8;
+    }
+    .notice {
+      margin-top:1rem;
+      color:#993333;
+      font-weight:bold;
+    }
+    .info {
+      margin-top:0.8rem;
+      font-size:0.9rem;
+      color:#444;
+    }
     /* Spinner */
     .loading { margin-top:2rem; display:none; }
     .spinner {
       margin:0 auto 1rem auto;
-      border:6px solid #eee;
-      border-top:6px solid #4a4a9f;
+      border:6px solid #f5e6c4;
+      border-top:6px solid #8b5e3c;
       border-radius:50%;
       width:40px; height:40px;
       animation:spin 1s linear infinite;
@@ -27,6 +64,17 @@
       100% { transform:rotate(360deg); }
     }
     .typing { white-space:pre-wrap; text-align:center; }
+    button {
+      margin-top:1.5rem;
+      background:#bbb;
+      color:#fff;
+      padding:0.5rem 1rem;
+      border:none;
+      border-radius:6px;
+      cursor:pointer;
+      font-size:0.9rem;
+    }
+    button:hover { background:#999; }
   </style>
 </head>
 <body>
@@ -97,6 +145,14 @@
       })();
     }
 
+    // Fisher-Yates 洗牌隨機選
+    function pickRandomUnique(data, used) {
+      const available = data.filter(d => !used.includes(d.id));
+      if (available.length === 0) return data[Math.floor(Math.random() * data.length)];
+      const i = Math.floor(Math.random() * available.length);
+      return available[i];
+    }
+
     async function drawAnswer(uid, count) {
       try {
         const res = await fetch("book_of_answers_384_full.json");
@@ -105,13 +161,7 @@
         const record = JSON.parse(localStorage.getItem("tokenRecord") || "{}");
         const userData = record.data[uid] || { usedAnswers: [] };
 
-        let available = data.filter(d => !userData.usedAnswers?.includes(d.id));
-        if (available.length === 0) {
-          available = [...data];
-          userData.usedAnswers = [];
-        }
-
-        const pick = available[Math.floor(Math.random() * available.length)];
+        const pick = pickRandomUnique(data, userData.usedAnswers || []);
 
         userData.usedAnswers = [...(userData.usedAnswers || []), pick.id];
         record.data[uid] = userData;
@@ -121,7 +171,7 @@
         document.getElementById("loading").style.display = "block";
         document.getElementById("output").style.display = "none";
 
-        const delay = 1000 + Math.random() * 2000; // 1~3秒
+        const delay = 1200 + Math.random() * 1500;
 
         setTimeout(() => {
           document.getElementById("loading").style.display = "none";
