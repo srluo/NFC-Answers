@@ -5,23 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NFC 答案之書 Demo</title>
   <style>
-    body { font-family: "Microsoft JhengHei", sans-serif; background:#f7f9fc; color:#333; text-align:center; padding:2rem; }
+    body { font-family:"Microsoft JhengHei",sans-serif; background:#f7f9fc; color:#333; text-align:center; padding:2rem; }
     header { font-size:1.6rem; font-weight:bold; color:#4a4a9f; margin-bottom:1rem; }
     .result { margin-top:2rem; padding:1.5rem; border-radius:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); font-size:1.2rem; line-height:1.8; }
     .notice { margin-top:1rem; color:#cc0000; font-weight:bold; }
     .info { margin-top:0.8rem; font-size:0.9rem; color:#666; }
     button { margin-top:1.5rem; background:#bbb; color:#fff; padding:0.5rem 1rem; border:none; border-radius:6px; cursor:pointer; font-size:0.9rem; }
     button:hover { background:#999; }
+    /* Spinner */
+    .loading { margin-top:2rem; display:none; }
+    .spinner {
+      margin:0 auto 1rem auto;
+      border:6px solid #eee;
+      border-top:6px solid #4a4a9f;
+      border-radius:50%;
+      width:40px; height:40px;
+      animation:spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform:rotate(0deg); }
+      100% { transform:rotate(360deg); }
+    }
+    .typing { white-space:pre-wrap; text-align:center; }
   </style>
 </head>
 <body>
   <header>📖 答案之書 (NFC Demo)</header>
   <p>感應 NFC 鑰匙圈即可抽出一則答案</p>
 
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>🔮 正在為你抽取今日答案...</p>
+  </div>
+
   <div id="output" class="result" style="display:none;">
     <h3>✨ 今日答案 ✨</h3>
-    <p id="ansZh"></p>
-    <p id="ansEn" style="color:#555;font-size:1rem;"></p>
+    <p id="ansZh" class="typing"></p>
+    <p id="ansEn" class="typing" style="color:#555;font-size:1rem;"></p>
     <p id="remaining" class="info"></p>
   </div>
 
@@ -64,6 +84,19 @@
       return { ok: true, first: false, userData, record };
     }
 
+    function typeWriter(text, element, speed = 40, callback) {
+      let i = 0;
+      element.innerText = "";
+      (function typing() {
+        if (i < text.length) {
+          element.innerText += text.charAt(i++);
+          setTimeout(typing, speed);
+        } else if (callback) {
+          callback();
+        }
+      })();
+    }
+
     async function drawAnswer(uid, count) {
       try {
         const res = await fetch("book_of_answers_384_full.json");
@@ -84,10 +117,20 @@
         record.data[uid] = userData;
         localStorage.setItem("tokenRecord", JSON.stringify(record));
 
-        document.getElementById("ansZh").innerText = pick.answer_tw;
-        document.getElementById("ansEn").innerText = pick.answer_en;
-        document.getElementById("remaining").innerText = `今日剩餘次數：${3 - count} / 3`;
-        document.getElementById("output").style.display = "block";
+        // 顯示等待轉盤
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("output").style.display = "none";
+
+        const delay = 1000 + Math.random() * 2000; // 1~3秒
+
+        setTimeout(() => {
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("output").style.display = "block";
+          typeWriter(pick.answer_tw, document.getElementById("ansZh"), 50, () => {
+            typeWriter(pick.answer_en, document.getElementById("ansEn"), 40);
+          });
+          document.getElementById("remaining").innerText = `今日剩餘次數：${3 - count} / 3`;
+        }, delay);
 
       } catch (err) {
         alert("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！");
@@ -123,6 +166,7 @@
       document.getElementById("notice").innerText = "✅ 抽籤紀錄已重置，可以重新感應。";
       document.getElementById("notice").style.display = "block";
       document.getElementById("output").style.display = "none";
+      document.getElementById("loading").style.display = "none";
     }
   </script>
 </body>
