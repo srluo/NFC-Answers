@@ -10,7 +10,6 @@
       color:#333;
       text-align:center;
       padding:2rem;
-      /* 設定背景為你上傳的古卷紋理圖 */
       background: url("book_bg1.jpg") no-repeat center center fixed;
       background-size: cover;
     }
@@ -67,6 +66,16 @@
       100% { transform:rotate(360deg); }
     }
     .typing { white-space:pre-wrap; text-align:center; }
+    .divider {
+      margin:1rem auto;
+      width:200px;
+    }
+    #hint {
+      margin-top:1rem;
+      font-size:1rem;
+      color:#333;
+      font-weight:bold;
+    }
   </style>
 </head>
 <body>
@@ -76,11 +85,13 @@
   <div id="loading" class="loading">
     <div class="spinner"></div>
     <p>🔮 正在為你抽取今日答案...</p>
+    <p id="hint">請在心中默念要解答的明確問題，心誠則靈！</p>
   </div>
 
   <div id="output" class="result" style="display:none;">
     <p style="color:#555;font-size:1.3rem;">✨ 今日答案 ✨</p>
     <p id="ansZh" class="typing"></p>
+    <img src="dividing-lines-1.png" class="divider" alt="divider">
     <p id="ansEn" class="typing" style="color:#333;font-size:1.2rem;"></p>
     <p id="remaining" class="info"></p>
   </div>
@@ -164,10 +175,11 @@
         document.getElementById("loading").style.display = "block";
         document.getElementById("output").style.display = "none";
 
-        const delay = 1000 + Math.random() * 2000;
+        const delay = 10000 + Math.random() * 2000; // 10~12秒
 
         setTimeout(() => {
           document.getElementById("loading").style.display = "none";
+          document.getElementById("hint").style.display = "none";
           document.getElementById("output").style.display = "block";
           typeWriter(pick.answer_tw, document.getElementById("ansZh"), 50, () => {
             typeWriter(pick.answer_en, document.getElementById("ansEn"), 40);
