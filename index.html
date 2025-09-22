@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NFC 求解之書 Demo</title>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     body {
       font-family:"Microsoft JhengHei",sans-serif;
@@ -35,11 +34,9 @@
       color:#b22222;
       font-weight:bold;
     }
-    .typing { white-space:pre-wrap; text-align:center; }
-    .divider { margin:1rem auto; width:200px; }
-    #saveBtn {
-      display:none;
-      margin-top:1.2rem;
+    .info { margin-top:0.8rem; font-size:0.9rem; color:#555; }
+    button {
+      margin-top:1.5rem;
       background:#7b5c2e;
       color:#fff;
       padding:0.6rem 1.2rem;
@@ -49,24 +46,25 @@
       font-size:0.9rem;
       box-shadow:0 2px 4px rgba(0,0,0,0.2);
     }
-    #saveBtn:hover { background:#5a4220; }
-
-    /* 隱藏的截圖區域 */
-    #captureArea {
-      display:none;
-      width:600px; height:600px;
-      background:#fdf5e6;
-      border:5px solid #d4af37;
-      border-radius:12px;
-      padding:20px;
-      box-sizing:border-box;
-      text-align:center;
-      font-family:'Microsoft JhengHei',sans-serif;
+    button:hover { background:#5a4220; }
+    /* Spinner */
+    .loading { margin-top:2rem; display:none; }
+    .spinner {
+      margin:0 auto 1rem auto;
+      border:6px solid #eee;
+      border-top:6px solid #7b5c2e;
+      border-radius:50%;
+      width:40px; height:40px;
+      animation:spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
+    .typing { white-space:pre-wrap; text-align:center; }
+    .divider { margin:1rem auto; width:200px; }
+    #hint {
+      margin-top:1rem;
+      font-size:1rem;
       color:#333;
-      display:flex;
-      flex-direction:column;
-      justify-content:center;
-      align-items:center;
+      font-weight:bold;
     }
   </style>
 </head>
@@ -74,63 +72,162 @@
   <header>📖 NFC 求解之書</header>
   <p>感應 NFC 鑰匙圈即可抽出一則答案</p>
 
-  <!-- 顯示結果 -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>🔮 正在為你抽取今日答案...</p><br>
+    <p id="hint">~ 請在心中默念要解答的明確問題 ~ <br>心誠則靈！</p>
+  </div>
+
   <div id="output" class="result" style="display:none;">
     <p style="color:#555;font-size:1.3rem;">✨ 今日答案 ✨</p>
+    <p id="todayDate" style="font-size:1rem;color:#444;"></p>
     <p id="ansZh" class="typing"></p>
     <img src="dividing-lines-1.png" class="divider" alt="divider">
     <p id="ansEn" class="typing" style="color:#333;font-size:1.2rem;"></p>
   </div>
 
   <p id="notice" class="notice" style="display:none;"></p>
-  <button id="saveBtn" onclick="saveResult()">📜 收藏此解答</button>
+  <!-- 預設隱藏，TS=00000000 才顯示 -->
+  <button id="resetBtn" onclick="resetRecord()" style="display:none;">
+    🔄 測試用：重置抽籤紀錄
+  </button>
 
-  <!-- 隱藏的截圖區域 -->
-  <div id="captureArea">
-    <p style="font-size:1.4rem;font-weight:bold;color:#4a2f00;margin-bottom:0.5rem;">
-      📖 NFC 求解之書
-    </p>
-    <p style="color:#555;font-size:1.3rem;">✨ 今日答案 ✨</p>
-    <p id="capZh" style="font-size:1.4rem;line-height:1.8;margin:1rem 0;"></p>
-    <img src="dividing-lines-1.png" class="divider" alt="divider" style="width:200px;margin:1rem 0;">
-    <p id="capEn" style="font-size:1.2rem;color:#333;line-height:1.6;margin:1rem 0;"></p>
-    <p id="capDate" style="margin-top:1rem;font-size:0.9rem;color:#4a2f00;font-style:italic;"></p>
-  </div>
+  <!-- 📜 收藏此解答 -->
+  <button id="saveBtn" onclick="saveResult()" style="display:none;">📜 收藏此解答</button>
 
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script>
-    // 模擬答案（實際會從 JSON 或 API 抽取）
-    const sampleZh = "結果將比你預期的更好。";
-    const sampleEn = "The result will be better than you expect.";
+    function checkToken(uid, tsHex) {
+      const today = new Date().toISOString().slice(0, 10);
+      let record = JSON.parse(localStorage.getItem("tokenRecord") || "{}");
 
-    // 顯示答案
+      if (record.date !== today) {
+        record = { date: today, data: {} };
+      }
+
+      const userData = record.data[uid] || { lastTS: null, count: 0, usedAnswers: [] };
+      const tsVal = parseInt(tsHex, 16);
+
+      if (userData.lastTS === null) {
+        userData.lastTS = tsVal;
+        userData.count = 1;
+        record.data[uid] = userData;
+        localStorage.setItem("tokenRecord", JSON.stringify(record));
+        return { ok: true, first: true, userData, record };
+      }
+
+      if (tsVal <= userData.lastTS) {
+        return { ok: false, error: "⚠️ Token 無效或重複使用，請重新感應。" };
+      }
+
+      if (userData.count >= 3) {
+        return { ok: false, error: "⚠️ 今日抽籤次數已達上限（3次）。" };
+      }
+
+      userData.lastTS = tsVal;
+      userData.count += 1;
+      record.data[uid] = userData;
+      localStorage.setItem("tokenRecord", JSON.stringify(record));
+
+      return { ok: true, first: false, userData, record };
+    }
+
+    function typeWriter(text, element, speed = 40, callback) {
+      let i = 0;
+      element.innerText = "";
+      (function typing() {
+        if (i < text.length) {
+          element.innerText += text.charAt(i++);
+          setTimeout(typing, speed);
+        } else if (callback) callback();
+      })();
+    }
+
+    async function drawAnswer(uid, count) {
+      try {
+        const res = await fetch("book_of_answers_384_full.json");
+        const data = await res.json();
+
+        const record = JSON.parse(localStorage.getItem("tokenRecord") || "{}");
+        const userData = record.data[uid] || { usedAnswers: [] };
+
+        let available = data.filter(d => !userData.usedAnswers?.includes(d.id));
+        if (available.length === 0) { available = [...data]; userData.usedAnswers = []; }
+
+        const pick = available[Math.floor(Math.random() * available.length)];
+        userData.usedAnswers = [...(userData.usedAnswers || []), pick.id];
+        record.data[uid] = userData;
+        localStorage.setItem("tokenRecord", JSON.stringify(record));
+
+        // 顯示等待轉盤
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("output").style.display = "none";
+        document.getElementById("saveBtn").style.display = "none";
+
+        const delay = 10000 + Math.random() * 2000; // 10~12秒
+        setTimeout(() => {
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("hint").style.display = "none";
+          document.getElementById("output").style.display = "block";
+          document.getElementById("saveBtn").style.display = "inline-block";
+
+          const today = new Date().toLocaleDateString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit"});
+          document.getElementById("todayDate").innerText = `📅 ${today}`;
+
+          typeWriter(pick.answer_tw, document.getElementById("ansZh"), 50, () => {
+            typeWriter(pick.answer_en, document.getElementById("ansEn"), 40);
+          });
+        }, delay);
+
+      } catch (err) { alert("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！"); }
+    }
+
     window.addEventListener("load", () => {
-      document.getElementById("ansZh").innerText = sampleZh;
-      document.getElementById("ansEn").innerText = sampleEn;
-      document.getElementById("output").style.display = "block";
-      document.getElementById("saveBtn").style.display = "inline-block";
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("d");
+      if (!token) {
+        document.getElementById("notice").innerText = "⚠️ 未偵測到 Token，請從 NFC 鑰匙圈感應進入！";
+        document.getElementById("notice").style.display = "block";
+        return;
+      }
+      const uid = token.substring(0, 14);
+      const tsHex = token.substring(16, 24);
+      if (tsHex === "00000000") document.getElementById("resetBtn").style.display = "inline-block";
+      const check = checkToken(uid, tsHex);
+      if (!check.ok) {
+        document.getElementById("notice").innerText = check.error;
+        document.getElementById("notice").style.display = "block";
+        return;
+      }
+      drawAnswer(uid, check.userData.count);
     });
 
-    // 保存截圖
+    // 🔄 測試用：不 reload，直接清空
+    function resetRecord() {
+      localStorage.removeItem("tokenRecord");
+      document.getElementById("notice").innerText = "✅ 抽籤紀錄已重置，可以重新感應。";
+      document.getElementById("notice").style.display = "block";
+      document.getElementById("output").style.display = "none";
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("saveBtn").style.display = "none";
+    }
+
+    // 📜 收藏此解答（含日期＋流水號）
     async function saveResult() {
-      // 填充隱藏區域內容
-      document.getElementById("capZh").innerText = sampleZh;
-      document.getElementById("capEn").innerText = sampleEn;
-      const today = new Date().toISOString().slice(0, 10);
-      document.getElementById("capDate").innerText = `📅 ${today}`;
+      const output = document.getElementById("output");
+      const today = new Date().toISOString().slice(0,10);
+      let counter = parseInt(localStorage.getItem("saveCounter_"+today) || "0", 10);
+      counter++;
+      localStorage.setItem("saveCounter_"+today, counter);
 
-      const captureArea = document.getElementById("captureArea");
-      captureArea.style.display = "flex"; // 暫時顯示以截圖
-
-      const canvas = await html2canvas(captureArea, {
-        backgroundColor: "#fdf5e6",
-        scale: 2
+      const canvas = await html2canvas(output, {
+        backgroundColor: "#fdf6e3", // 古卷底色
+        padding: 5
       });
       const link = document.createElement("a");
-      link.download = `BookOfAnswers_${today}.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.download = `answer_${today}_${counter}.png`;
+      link.href = canvas.toDataURL();
       link.click();
-
-      captureArea.style.display = "none"; // 再次隱藏
     }
   </script>
 </body>
