@@ -34,7 +34,11 @@
       color:#b22222;
       font-weight:bold;
     }
-    .info { margin-top:0.8rem; font-size:0.9rem; color:#555; }
+    .info {
+      margin-top:0.8rem;
+      font-size:0.9rem;
+      color:#555;
+    }
     button {
       margin-top:1.5rem;
       background:#7b5c2e;
@@ -57,9 +61,15 @@
       width:40px; height:40px;
       animation:spin 1s linear infinite;
     }
-    @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
+    @keyframes spin {
+      0% { transform:rotate(0deg); }
+      100% { transform:rotate(360deg); }
+    }
     .typing { white-space:pre-wrap; text-align:center; }
-    .divider { margin:1rem auto; width:200px; }
+    .divider {
+      margin:1rem auto;
+      width:200px;
+    }
     #hint {
       margin-top:1rem;
       font-size:1rem;
@@ -80,22 +90,22 @@
 
   <div id="output" class="result" style="display:none;">
     <p style="color:#555;font-size:1.3rem;">✨ 今日答案 ✨</p>
-    <p id="todayDate" style="font-size:1rem;color:#444;"></p>
     <p id="ansZh" class="typing"></p>
     <img src="dividing-lines-1.png" class="divider" alt="divider">
     <p id="ansEn" class="typing" style="color:#333;font-size:1.2rem;"></p>
   </div>
 
   <p id="notice" class="notice" style="display:none;"></p>
-  <!-- 預設隱藏，TS=00000000 才顯示 -->
+
+  <!-- 📜 收藏按鈕 -->
+  <button id="saveBtn" onclick="saveResult()" style="display:none;">📜 收藏此解答</button>
+
+  <!-- TS=00000000 才顯示的重置按鈕 -->
   <button id="resetBtn" onclick="resetRecord()" style="display:none;">
     🔄 測試用：重置抽籤紀錄
   </button>
 
-  <!-- 📜 收藏此解答 -->
-  <button id="saveBtn" onclick="saveResult()" style="display:none;">📜 收藏此解答</button>
-
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
     function checkToken(uid, tsHex) {
       const today = new Date().toISOString().slice(0, 10);
@@ -139,7 +149,9 @@
         if (i < text.length) {
           element.innerText += text.charAt(i++);
           setTimeout(typing, speed);
-        } else if (callback) callback();
+        } else if (callback) {
+          callback();
+        }
       })();
     }
 
@@ -152,9 +164,13 @@
         const userData = record.data[uid] || { usedAnswers: [] };
 
         let available = data.filter(d => !userData.usedAnswers?.includes(d.id));
-        if (available.length === 0) { available = [...data]; userData.usedAnswers = []; }
+        if (available.length === 0) {
+          available = [...data];
+          userData.usedAnswers = [];
+        }
 
         const pick = available[Math.floor(Math.random() * available.length)];
+
         userData.usedAnswers = [...(userData.usedAnswers || []), pick.id];
         record.data[uid] = userData;
         localStorage.setItem("tokenRecord", JSON.stringify(record));
@@ -165,40 +181,115 @@
         document.getElementById("saveBtn").style.display = "none";
 
         const delay = 10000 + Math.random() * 2000; // 10~12秒
+
         setTimeout(() => {
           document.getElementById("loading").style.display = "none";
           document.getElementById("hint").style.display = "none";
           document.getElementById("output").style.display = "block";
           document.getElementById("saveBtn").style.display = "inline-block";
-
-          const today = new Date().toLocaleDateString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit"});
-          document.getElementById("todayDate").innerText = `📅 ${today}`;
-
           typeWriter(pick.answer_tw, document.getElementById("ansZh"), 50, () => {
             typeWriter(pick.answer_en, document.getElementById("ansEn"), 40);
           });
         }, delay);
 
-      } catch (err) { alert("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！"); }
+      } catch (err) {
+        alert("⚠️ 載入答案失敗，請檢查 JSON 檔案路徑！");
+      }
+    }
+
+    // 📜 保存截圖
+    async function saveResult() {
+      const output = document.getElementById("output");
+      if (!output || output.style.display === "none") return;
+
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "10px";
+      wrapper.style.background = `url('book_bg1_A600.jpg')`;
+      wrapper.style.backgroundSize = "cover";
+      wrapper.style.display = "inline-block";
+      wrapper.style.textAlign = "center";
+      wrapper.style.fontFamily = "Microsoft JhengHei, sans-serif";
+
+      // 標題
+      const titleEl = document.createElement("p");
+      titleEl.innerText = "📖 NFC 求解之書";
+      titleEl.style.fontWeight = "bold";
+      titleEl.style.marginBottom = "0.5rem";
+      wrapper.appendChild(titleEl);
+
+      // 於 + 日期
+      const today = new Date().toLocaleDateString("zh-TW", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      });
+      const dateEl = document.createElement("p");
+      dateEl.innerText = `於 ${today}`;
+      dateEl.style.marginBottom = "1rem";
+      dateEl.style.fontWeight = "bold";
+      wrapper.appendChild(dateEl);
+
+      // 中文答案
+      const zh = document.getElementById("ansZh").innerText;
+      const zhEl = document.createElement("p");
+      zhEl.innerText = zh;
+      zhEl.style.fontSize = "1.5rem";
+      zhEl.style.margin = "1rem 0";
+      wrapper.appendChild(zhEl);
+
+      // 分隔線
+      const divider = document.createElement("img");
+      divider.src = "dividing-lines-1.png";
+      divider.style.width = "200px";
+      divider.style.margin = "0.5rem auto";
+      wrapper.appendChild(divider);
+
+      // 英文答案
+      const en = document.getElementById("ansEn").innerText;
+      const enEl = document.createElement("p");
+      enEl.innerText = en;
+      enEl.style.fontSize = "1.2rem";
+      enEl.style.color = "#333";
+      enEl.style.margin = "1rem 0";
+      wrapper.appendChild(enEl);
+
+      document.body.appendChild(wrapper);
+
+      const canvas = await html2canvas(wrapper, { scale: 2 });
+      const link = document.createElement("a");
+      link.download = "nfc_answer.png";
+      link.href = canvas.toDataURL();
+      link.click();
+
+      document.body.removeChild(wrapper);
     }
 
     window.addEventListener("load", () => {
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get("d");
+
       if (!token) {
         document.getElementById("notice").innerText = "⚠️ 未偵測到 Token，請從 NFC 鑰匙圈感應進入！";
         document.getElementById("notice").style.display = "block";
         return;
       }
+
       const uid = token.substring(0, 14);
       const tsHex = token.substring(16, 24);
-      if (tsHex === "00000000") document.getElementById("resetBtn").style.display = "inline-block";
+
+      // ✅ TS=00000000 才顯示重置按鈕
+      if (tsHex === "00000000") {
+        document.getElementById("resetBtn").style.display = "inline-block";
+      }
+
       const check = checkToken(uid, tsHex);
+
       if (!check.ok) {
         document.getElementById("notice").innerText = check.error;
         document.getElementById("notice").style.display = "block";
         return;
       }
+
       drawAnswer(uid, check.userData.count);
     });
 
@@ -210,24 +301,6 @@
       document.getElementById("output").style.display = "none";
       document.getElementById("loading").style.display = "none";
       document.getElementById("saveBtn").style.display = "none";
-    }
-
-    // 📜 收藏此解答（含日期＋流水號）
-    async function saveResult() {
-      const output = document.getElementById("output");
-      const today = new Date().toISOString().slice(0,10);
-      let counter = parseInt(localStorage.getItem("saveCounter_"+today) || "0", 10);
-      counter++;
-      localStorage.setItem("saveCounter_"+today, counter);
-
-      const canvas = await html2canvas(output, {
-        backgroundColor: "#fdf6e3", // 古卷底色
-        padding: 5
-      });
-      const link = document.createElement("a");
-      link.download = `answer_${today}_${counter}.png`;
-      link.href = canvas.toDataURL();
-      link.click();
     }
   </script>
 </body>
