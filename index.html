@@ -93,15 +93,20 @@
     <p id="ansZh" class="typing"></p>
     <img src="dividing-lines-1.png" class="divider" alt="divider">
     <p id="ansEn" class="typing" style="color:#333;font-size:1.2rem;"></p>
-    <p id="remaining" class="info"></p>
   </div>
 
+  <p id="remaining" class="info" style="display:none;"></p>
   <p id="notice" class="notice" style="display:none;"></p>
+
+  <!-- 📜 收藏此解答 -->
+  <button id="saveBtn" onclick="saveResult()" style="display:none;">📜 收藏此解答</button>
+
   <!-- 預設隱藏，TS=00000000 才顯示 -->
   <button id="resetBtn" onclick="resetRecord()" style="display:none;">
     🔄 測試用：重置抽籤紀錄
   </button>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
     function checkToken(uid, tsHex) {
       const today = new Date().toISOString().slice(0, 10);
@@ -153,27 +158,29 @@
 
     async function drawAnswer(uid, count) {
       try {
-        // ✅ 改成呼叫後端 API，而不是直接 fetch JSON
-        const res = await fetch("/api/answer");
-        const pick = await res.json();
+        const res = await fetch("/api/getAnswer"); // 🔑 改為 Vercel API
+        const data = await res.json();
 
-        if (!pick || !pick.answer_tw || !pick.answer_en) {
-          throw new Error("API 沒有回傳有效答案");
-        }
-
-        // 更新 localStorage，避免當日重複
         const record = JSON.parse(localStorage.getItem("tokenRecord") || "{}");
         const userData = record.data[uid] || { usedAnswers: [] };
 
-        if (!userData.usedAnswers.includes(pick.id)) {
-          userData.usedAnswers.push(pick.id);
+        let available = data.filter(d => !userData.usedAnswers?.includes(d.id));
+        if (available.length === 0) {
+          available = [...data];
+          userData.usedAnswers = [];
         }
+
+        const pick = available[Math.floor(Math.random() * available.length)];
+
+        userData.usedAnswers = [...(userData.usedAnswers || []), pick.id];
         record.data[uid] = userData;
         localStorage.setItem("tokenRecord", JSON.stringify(record));
 
         // 顯示等待轉盤
         document.getElementById("loading").style.display = "block";
         document.getElementById("output").style.display = "none";
+        document.getElementById("saveBtn").style.display = "none";
+        document.getElementById("remaining").style.display = "none";
 
         const delay = 10000 + Math.random() * 2000; // 10~12秒
 
@@ -181,6 +188,9 @@
           document.getElementById("loading").style.display = "none";
           document.getElementById("hint").style.display = "none";
           document.getElementById("output").style.display = "block";
+          document.getElementById("saveBtn").style.display = "inline-block";
+          document.getElementById("remaining").style.display = "block";
+
           typeWriter(pick.answer_tw, document.getElementById("ansZh"), 50, () => {
             typeWriter(pick.answer_en, document.getElementById("ansEn"), 40);
           });
@@ -188,8 +198,7 @@
         }, delay);
 
       } catch (err) {
-        console.error(err);
-        alert("⚠️ 無法取得答案，請稍後再試！");
+        alert("⚠️ 載入答案失敗，請檢查 API。");
       }
     }
 
@@ -222,6 +231,40 @@
       drawAnswer(uid, check.userData.count);
     });
 
+    // 📜 收藏此解答
+    async function saveResult(){
+      const output=document.getElementById("output");
+      const date=new Date().toISOString().slice(0,10);
+      const countKey="saveCount_"+date;
+      let saveCount=parseInt(localStorage.getItem(countKey)||"0")+1;
+      localStorage.setItem(countKey,saveCount);
+
+      const wrapper=document.createElement("div");
+      wrapper.style.padding="10px";
+      wrapper.style.width=output.offsetWidth+"px";
+      wrapper.style.backgroundImage="url('book_bg1_A600.jpg')";
+      wrapper.style.backgroundSize="cover";
+      wrapper.style.backgroundRepeat="no-repeat";
+      wrapper.style.backgroundPosition="center";
+
+      wrapper.innerHTML=`
+        <div style="background:rgba(255,255,255,0.6);padding:20px;border-radius:12px;">
+          <h3 style="margin:0 0 10px;font-size:1.4rem;color:#4a2f00;">📖 NFC 求解之書</h3>
+          <p style="margin:0 0 15px;color:#333;">於 ${date}</p>
+          ${output.innerHTML}
+        </div>
+      `;
+
+      document.body.appendChild(wrapper);
+      const canvas=await html2canvas(wrapper,{backgroundColor:null});
+      document.body.removeChild(wrapper);
+
+      const link=document.createElement("a");
+      link.download=`answer_${date}_${saveCount}.png`;
+      link.href=canvas.toDataURL();
+      link.click();
+    }
+
     // 🔄 測試用：不 reload，直接清空
     function resetRecord() {
       localStorage.removeItem("tokenRecord");
@@ -229,6 +272,7 @@
       document.getElementById("notice").style.display = "block";
       document.getElementById("output").style.display = "none";
       document.getElementById("loading").style.display = "none";
+      document.getElementById("saveBtn").style.display = "none";
     }
   </script>
 </body>
